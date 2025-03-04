@@ -1,3 +1,134 @@
+# Automating Kerberos Ticket Renewal with a Cron Job
+
+This guide explains how to generate a Kerberos keytab, create a script to renew Kerberos tickets, and automate the renewal process using a cron job.
+
+---
+
+## 1. Generate a Keytab
+
+Instead of storing a password, generate a **Kerberos keytab** file.
+
+### **Step 1: Open `ktutil`**
+Run the following command:
+
+```bash
+ktutil
+```
+
+### **Step 2: Add an Entry to the Keytab**
+Inside the interactive shell, run:
+
+```bash
+addent -password -p user@ACCT.UPMCHS.NET -k 1 -e aes256-cts-hmac-sha1-96
+```
+It will prompt you for a password:
+```
+Password for user@ACCT.UPMCHS.NET:
+```
+Enter your password and press **Enter**.
+
+### **Step 3: Write the Keytab File**
+```bash
+wkt user.keytab
+quit
+```
+
+### **Step 4: Move the Keytab to a Secure Location**
+Before moving the keytab, **ensure the `.keytabs` directory exists**:
+
+```bash
+mkdir -p ~/.keytabs
+```
+
+Then, move the keytab file:
+
+```bash
+mv user.keytab ~/.keytabs/
+chmod 600 ~/.keytabs/user.keytab
+```
+This ensures the keytab is stored securely with restricted permissions.
+
+---
+
+## 2. Create a Script to Renew Kerberos Tickets
+Create a script named `renew_ticket.sh` to automate ticket renewal.
+
+### **Step 1: Create the Script**
+
+```bash
+nano ~/renew_ticket.sh
+```
+
+Paste the following content:
+
+```bash
+#!/bin/bash
+export KRB5CCNAME=$(klist | awk '/Ticket cache:/ {print $3}' | sed 's/FILE://')
+/usr/bin/kinit -k -t ~/.keytabs/user.keytab user@ACCT.UPMCHS.NET
+```
+
+### **Step 2: Make the Script Executable**
+```bash
+chmod +x ~/renew_ticket.sh
+```
+
+---
+
+## 3. Add a Cron Job for Automatic Ticket Renewal
+
+To ensure the ticket is renewed automatically, set up a cron job.
+
+### **Step 1: Edit Crontab**
+```bash
+crontab -e
+```
+
+### **Step 2: Add the Following Line**
+```bash
+0 */6 * * * /home/user/renew_ticket.sh
+```
+This will run `renew_ticket.sh` **every 6 hours** to keep the ticket valid.
+
+### **Step 3: Verify the Cron Job**
+To confirm that the cron job is scheduled:
+```bash
+crontab -l
+```
+
+---
+
+## Testing the Setup
+After setting everything up, manually test it:
+```bash
+./renew_ticket.sh
+klist
+```
+If successful, `klist` should show an updated **Valid starting** timestamp.
+
+---
+
+## Security Considerations
+- **Never store passwords in plaintext scripts** – Using a keytab is much safer.
+- **Restrict permissions** on the keytab file (`chmod 600 ~/.keytabs/user.keytab`).
+- **Use a dedicated ticket cache for cron jobs**, which the script handles automatically.
+
+---
+
+## Troubleshooting
+- If you get `Permission denied` when running the script:
+  ```bash
+  chmod +x ~/renew_ticket.sh
+  ```
+- If `klist` does not show an updated ticket, verify that the keytab is correct:
+  ```bash
+  kinit -k -t ~/.keytabs/user.keytab user@ACCT.UPMCHS.NET
+  klist
+  ```
+- If the cron job is not running, check the cron logs:
+  ```bash
+  grep CRON /var/log/syslog
+  ```
+
 # NIFTI Processing Scripts Documentation
 
 ## Overview
