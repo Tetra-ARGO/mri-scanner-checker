@@ -63,8 +63,14 @@ Paste the following content:
 
 ```bash
 #!/bin/bash
-export KRB5CCNAME=$(klist | awk '/Ticket cache:/ {print $3}' | sed 's/FILE://')
-/usr/bin/kinit -k -t ~/.keytabs/user.keytab user@ACCT.UPMCHS.NET
+export KRB5CCNAME=FILE:/tmp/krb5cc_user  # Use a fixed cache file
+
+# Try renewing the ticket first, if it fails, request a new one
+/usr/bin/kinit -R 2>/dev/null || /usr/bin/kinit -k -t ~/.keytabs/user.keytab user@ACCT.UPMCHS.NET
+
+# Get necessary service tickets
+kvno cifs/192.168.30.11@ACCT.UPMCHS.NET
+kvno cifs/oacres5.acct.upmchs.net@ACCT.UPMCHS.NET
 ```
 
 ### **Step 2: Make the Script Executable**
@@ -85,7 +91,7 @@ crontab -e
 
 ### **Step 2: Add the Following Line**
 ```bash
-0 */6 * * * /home/user/renew_ticket.sh
+0 */6 * * * KRB5CCNAME=FILE:/tmp/krb5cc_user /home/user/renew_ticket.sh
 ```
 This will run `renew_ticket.sh` **every 6 hours** to keep the ticket valid.
 
@@ -100,8 +106,8 @@ crontab -l
 ## Testing the Setup
 After setting everything up, manually test it:
 ```bash
-./renew_ticket.sh
-klist
+kdestroy
+env -i bash --noprofile --norc -c "/home/user/renew_ticket.sh && klist -c /tmp/krb5cc_user"
 ```
 If successful, `klist` should show an updated **Valid starting** timestamp.
 
@@ -126,8 +132,15 @@ If successful, `klist` should show an updated **Valid starting** timestamp.
   ```
 - If the cron job is not running, check the cron logs:
   ```bash
-  grep CRON /var/log/syslog
+  sudo grep CRON /var/log/syslog | grep renew_ticket.sh
   ```
+
+---
+
+## Conclusion
+With this setup, your Kerberos ticket will be renewed automatically every 6 hours, ensuring seamless authentication for background processes.
+
+
 
 # NIFTI Processing Scripts Documentation
 
